@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>媒体文件编码查询demo</title>
+  </head>
+  <body>
+    <input type="file" onchange="getFile(event)">
+    <div id="loadProcess" style="height:18px;background:#242424;width:0"></div>
+  </body>
+  <script src='mediaInfo.js'></script>
+  <script>
+    const getFile = event => {
+      const file = event
+        .target
+        .files[0];
+      var chunkSize = 1024 * 1024; // bytes
+      var fileSize = file.size;
+      var offset = 0;
+      var readBlock = null;
+      var startDate = new Date();
+      var mp4box = new ISOFile(false);
+      mp4box.onError = err => {
+        console.log("mp4box failed to parse data.");
+      };
+      var finalizeUI = () => {
+        if (!mp4box || !mp4box.moovStartSent) {
+          console.warn('!非媒体文件')
+        } else {
+          var info = mp4box.getInfo();
+          console.log('媒体信息 ===== >>>', info)
+          // 视频编码取自mime:{codecs}
+        }
+      }
+      var onparsedbuffer = (mp4box, buffer) => {
+        console.log("Appending buffer with offset " + offset);
+        buffer.fileStart = offset;
+        mp4box.appendBuffer(buffer);
+      }
+      var onBlockRead = evt => {
+        if (evt.target.error == null) {
+          onparsedbuffer(mp4box, evt.target.result); // callback for handling read chunk
+          offset += evt.target.result.byteLength;
+          document
+            .getElementById('loadProcess')
+            .style
+            .width = `${Math.ceil(100 * offset / fileSize)}%`
+        } else {
+          console.log("Read error: " + evt.target.error);
+          return;
+        }
+        if (offset >= fileSize) {
+          console.log(`加载完成,总大小${fileSize}耗时${new Date() - startDate}ms`)
+          mp4box.flush();
+          finalizeUI();
+          return;
+        }
+        readBlock(offset, chunkSize, file);
+      }
+      readBlock = (_offset, length, _file) => {
+        var r = new FileReader();
+        var blob = _file.slice(_offset, length + _offset);
+        r.onload = onBlockRead;
+        r.readAsArrayBuffer(blob);
+      }
+      readBlock(offset, chunkSize, file);
+    }
+  </script>
+</html>
